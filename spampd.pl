@@ -797,6 +797,7 @@ my $tagall = 0; # mark-up all msgs with SA, not just spam
 my $maxsize = 64; # max. msg size to scan with SA, in KB.
 my $rh = 0; # log which rules were hit
 my $debug = 0; # debug flag
+my $sadebugfacilities = ''; #list of facilities to post debug messages from as per the spamassassin man page/
 my $dose = 0; # die-on-sa-errors flag
 my $logsock = "unix";  # default log socket (some systems like 'inet')
 my $nsloglevel = 2; # default log level for Net::Server (in the range 0-4)
@@ -849,7 +850,7 @@ usage(1) unless GetOptions(\%options,
 		   'tagall|a',
 		   'auto-whitelist|aw',
 		   'stop-at-threshold',  # deprecated
-		   'debug|d',
+		   'debug|d=s',
 		   'help|h|?',
 		   'local-only|l',
 		   'log-rules-hit|rh',
@@ -887,7 +888,7 @@ $port = $1 if $port =~ /^(.*)$/;
 
 if ( $options{tagall} ) { $tagall = 1; }
 if ( $options{'log-rules-hit'} ) { $rh = 1; }
-if ( $options{debug} ) { $debug = 1; $nsloglevel = 4; }
+if ( $options{'debug'} ) { $debug = 1; $sadebugfacilities = $options{'debug'}; $nsloglevel = 4; }
 if ( $options{dose} ) { $dose = 1; }
 if ( $options{'nodetach'} ) { $background = undef; }
 if ( $options{'set-envelope-headers'} ) { $envelopeheaders = 1; }
@@ -911,7 +912,7 @@ if ( $tmp[1] ) { $port = $tmp[1]; }
 
 my $sa_options = { 
 		'dont_copy_prefs' => 1,
-		'debug' => $debug,
+		'debug' => $sadebugfacilities,
 		'local_tests_only' => $options{'local-only'} || 0,
 		'home_dir_for_helpers' => $sa_home_dir, 
 		'userstate_dir' => $sa_home_dir, 
@@ -930,6 +931,14 @@ $ENV{'PATH'} = '/bin:/usr/bin:/sbin:/usr/sbin';
 delete @ENV{'IFS', 'CDPATH', 'ENV', 'BASH_ENV', 'HOME'};
 
 my $assassin = Mail::SpamAssassin->new($sa_options);
+
+if ( $debug )
+{
+   Mail::SpamAssassin::Logger::add(method => 'syslog',
+                                       socket => $logsock,
+                                       facility => $sadebugfacilities,
+                                       ident => 'spampd');
+}
 
 $options{'auto-whitelist'} and eval {
    require Mail::SpamAssassin::DBBasedAddrList;
